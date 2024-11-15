@@ -83,7 +83,7 @@ void addColumn(Table* table, const string& columnName) {
 void Database::loadSchema(const string& schemaPath) {
     ifstream schemaFile(schemaPath);
     if (!schemaFile) {
-        cerr << "Не удалось открыть файл конфигурации." << endl;
+        cerr << "Не удалось открыть файл конфигурации" << endl;
         return;
     }
     json schemaJson;
