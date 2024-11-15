@@ -37,7 +37,6 @@ struct Database {
     string name;
     int tuples_limit;
     Table* tables = nullptr;
-
     void loadSchema(const string& schemaPath);
     void createFileStructure();
     void insertRow(const string& tableName, const string& values);
@@ -54,7 +53,6 @@ struct Condition {
 };
 
 const int MAX_CONDITIONS = 10;
-
 void addTable(Database* db, const string& tableName) {
     Table* newTable = new Table();
     newTable->name = tableName;
@@ -72,7 +70,6 @@ void addTable(Database* db, const string& tableName) {
 void addColumn(Table* table, const string& columnName) {
     Column* newColumn = new Column();
     newColumn->name = columnName;
-
     if (!table->columns) {
         table->columns = newColumn;
     } else {
@@ -89,18 +86,14 @@ void Database::loadSchema(const string& schemaPath) {
         cerr << "Не удалось открыть файл конфигурации." << endl;
         return;
     }
-
     json schemaJson;
     schemaFile >> schemaJson;
-
     this->name = schemaJson["name"];
     this->tuples_limit = schemaJson["tuples_limit"];
-
     for (auto& [tableName, columns] : schemaJson["structure"].items()) {
         addTable(this, tableName);
         Table* currentTable = tables;
         while (currentTable->next) currentTable = currentTable->next;
-
         for (const auto& columnName : columns) {
             addColumn(currentTable, columnName);
         }
@@ -109,12 +102,10 @@ void Database::loadSchema(const string& schemaPath) {
 
 void Database::createFileStructure() {
     fs::create_directory(this->name);
-
     Table* table = this->tables;
     while (table) {
         string tableDir = this->name + "/" + table->name;
         fs::create_directory(tableDir);
-
         string dataFilePath = tableDir + "/1.csv";
         if (!fs::exists(dataFilePath)) {
             ofstream dataFile(dataFilePath);
@@ -163,22 +154,18 @@ int parseConditions(const string& condition, Condition conditions[]) {
         size_t nextOr = condition.find(" OR ", pos);
         size_t end = min(nextAnd == string::npos ? condition.length() : nextAnd,
                          nextOr == string::npos ? condition.length() : nextOr);
-
         string token = condition.substr(pos, end - pos);
         size_t eqPos = token.find('=');
         if (eqPos != string::npos) {
             conditions[count].column = token.substr(0, eqPos);
             conditions[count].value = token.substr(eqPos + 1);
-
             conditions[count].column.erase(0, conditions[count].column.find_first_not_of(" "));
             conditions[count].column.erase(conditions[count].column.find_last_not_of(" ") + 1);
             conditions[count].value.erase(0, conditions[count].value.find_first_not_of(" '"));
             conditions[count].value.erase(conditions[count].value.find_last_not_of(" '") + 1);
-
             conditions[count].operation = currentOp;
             count++;
         }
-
         if (end == nextAnd) {
             currentOp = "AND";
             pos = end + 5;
@@ -197,35 +184,25 @@ void Database::insertRow(const string& tableName, const string& values) {
     while (table && table->name != tableName) {
         table = table->next;
     }
-
     if (table) {
         lock_guard<mutex> guard(table->lock);
-
         if (table->rowCount < this->tuples_limit) {
             Row* newRow = new Row();
-
-            // Очистка строки `values` от лишних символов
             string cleanedValues = values;
             cleanedValues.erase(0, cleanedValues.find_first_not_of(" ('"));
             cleanedValues.erase(cleanedValues.find_last_not_of(" ')") + 1);
-            
             stringstream ss(cleanedValues);
             string value;
             string rowData;
-
-            // Чтение значений и их объединение в строку для хранения
             while (getline(ss, value, ',')) {
                 value.erase(0, value.find_first_not_of(" '"));
                 value.erase(value.find_last_not_of(" '") + 1);
                 rowData += value + ",";
             }
-
             if (!rowData.empty()) {
-                rowData.pop_back(); // Удаление последней запятой
+                rowData.pop_back();
             }
-            
             newRow->data = rowData;
-
             if (!table->rows) {
                 table->rows = newRow;
             } else {
@@ -236,10 +213,8 @@ void Database::insertRow(const string& tableName, const string& values) {
             }
             table->rowCount++;
             table->pk_sequence++;
-
-            // Сохранение строки в файл данных
             string tableDir = this->name + "/" + table->name;
-            ofstream dataFile(tableDir + "/1.csv", ios_base::app); // Открываем в режиме добавления
+            ofstream dataFile(tableDir + "/1.csv", ios_base::app);
             dataFile << rowData << "\n";
             dataFile.close();
         } else {
@@ -250,25 +225,20 @@ void Database::insertRow(const string& tableName, const string& values) {
     }
 }
 
-
 void Database::selectRows(const string& tableName, const string& condition) {
     Table* table = this->tables;
     while (table && table->name != tableName) {
         table = table->next;
     }
-
     if (!table) {
         cerr << "Таблица не найдена: " << tableName << endl;
         return;
     }
-
     Condition conditions[MAX_CONDITIONS];
     int conditionCount = parseConditions(condition, conditions);
-
     Row* row = table->rows;
     while (row) {
         bool match = (conditionCount > 0) ? (conditions[0].operation == "OR" ? false : true) : true;
-
         for (int i = 0; i < conditionCount; i++) {
             bool conditionMet = (row->data.find(conditions[i].value) != string::npos);
             if (conditions[i].operation == "AND") {
@@ -277,7 +247,6 @@ void Database::selectRows(const string& tableName, const string& condition) {
                 match = match || conditionMet;
             }
         }
-
         if (match) {
             cout << row->data << endl;
         }
@@ -290,19 +259,15 @@ void Database::deleteRows(const string& tableName, const string& condition) {
     while (table && table->name != tableName) {
         table = table->next;
     }
-
     if (!table) {
         cerr << "Таблица не найдена: " << tableName << endl;
         return;
     }
-
     Condition conditions[MAX_CONDITIONS];
     int conditionCount = parseConditions(condition, conditions);
-
     Row* row = table->rows;
     while (row) {
         bool match = (conditionCount > 0) ? (conditions[0].operation == "OR" ? false : true) : true;
-
         for (int i = 0; i < conditionCount; i++) {
             bool conditionMet = (row->data.find(conditions[i].value) != string::npos);
             if (conditions[i].operation == "AND") {
@@ -311,12 +276,10 @@ void Database::deleteRows(const string& tableName, const string& condition) {
                 match = match || conditionMet;
             }
         }
-
         if (match) {
             if (row->prev) row->prev->next = row->next;
             if (row->next) row->next->prev = row->prev;
             if (row == table->rows) table->rows = row->next;
-
             Row* temp = row;
             row = row->next;
             delete temp;
@@ -325,8 +288,6 @@ void Database::deleteRows(const string& tableName, const string& condition) {
             row = row->next;
         }
     }
-
-    // Сохранение изменений в файле
     string tableDir = this->name + "/" + table->name + "/1.csv";
     ofstream dataFile(tableDir, ios::trunc);
     Column* col = table->columns;
@@ -334,7 +295,6 @@ void Database::deleteRows(const string& tableName, const string& condition) {
         dataFile << col->name << (col->next ? "," : "\n");
         col = col->next;
     }
-
     row = table->rows;
     while (row) {
         dataFile << row->data << "\n";
@@ -346,15 +306,12 @@ void Database::deleteRows(const string& tableName, const string& condition) {
 void Database::crossJoinSelect(const string& tableName1, const string& tableName2, const string& columns) {
     Table* table1 = this->tables;
     Table* table2 = this->tables;
-
     while (table1 && table1->name != tableName1) {
         table1 = table1->next;
     }
-
     while (table2 && table2->name != tableName2) {
         table2 = table2->next;
     }
-
     if (table1 && table2) {
         Row* row1 = table1->rows;
         while (row1) {
@@ -375,31 +332,25 @@ void Database::parseAndExecuteCommand(const string& command) {
     string action;
     istringstream stream(command);
     stream >> action;
-
     if (action == "SELECT") {
         size_t fromPos = command.find(" FROM ");
         if (fromPos == string::npos) {
             cerr << "Ошибка в синтаксисе: Ожидается ключевое слово 'FROM'" << endl;
             return;
         }
-
         string columns = command.substr(7, fromPos - 7);
         string afterFrom = command.substr(fromPos + 6);
-
         size_t wherePos = afterFrom.find(" WHERE ");
         string tableName;
         string condition;
-
         if (wherePos != string::npos) {
             tableName = afterFrom.substr(0, wherePos);
             condition = afterFrom.substr(wherePos + 7);
         } else {
             tableName = afterFrom;
         }
-
         tableName.erase(0, tableName.find_first_not_of(" "));
         tableName.erase(tableName.find_last_not_of(" ") + 1);
-
         if (tableName.find(",") != string::npos) {
             string tableName1 = tableName.substr(0, tableName.find(","));
             string tableName2 = tableName.substr(tableName.find(",") + 1);
@@ -411,23 +362,19 @@ void Database::parseAndExecuteCommand(const string& command) {
         } else {
             selectRows(tableName, condition);
         }
-
     } else if (action == "DELETE") {
         string from, tableName, condition;
         stream >> from >> tableName;
-
         string whereKeyword;
         if (stream >> whereKeyword && whereKeyword == "WHERE") {
             getline(stream, condition);
         }
         deleteRows(tableName, condition);
-
     } else if (action == "INSERT") {
         string into, tableName, values;
         stream >> into >> tableName >> action;
         getline(stream, values, ')');
         insertRow(tableName, values.substr(1));
-        
     } else {
         cerr << "Неизвестная команда: " << action << endl;
     }
@@ -437,20 +384,16 @@ int main() {
     Database db;
     db.loadSchema("schema.json");
     db.createFileStructure();
-
     string command;
     cout << "Введите SQL-команду (или 'exit' для выхода):" << endl;
     while (true) {
         cout << "> ";
         getline(cin, command);
-
         if (command == "exit") {
             break;
         }
-
         db.parseAndExecuteCommand(command);
     }
-
     return 0;
 }
 
